@@ -3,39 +3,34 @@ import subprocess
 import sys
 import threading
 import os
+import logging
 
-# Function to install a module with error handling
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Function to install a module
 def install_module(module_name):
     try:
         importlib.import_module(module_name)
-        print(f"{module_name} is already installed.")
+        logger.info(f"{module_name} is already installed.")
     except ImportError:
-        print(f"{module_name} not found. Attempting to install...")
+        logger.info(f"{module_name} not found. Attempting to install...")
         try:
-            # Ensure pip is up-to-date
             subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "pip"])
-            # Try normal install (virtualenv)
             try:
                 subprocess.check_call([sys.executable, "-m", "pip", "install", module_name])
             except subprocess.CalledProcessError:
-                # Fallback to --user
-                print(f"Normal install failed, trying with --user for {module_name}...")
+                logger.warning(f"Normal install failed, trying with --user for {module_name}...")
                 subprocess.check_call([sys.executable, "-m", "pip", "install", "--user", module_name])
-            print(f"{module_name} installed successfully.")
+            logger.info(f"{module_name} installed successfully.")
         except subprocess.CalledProcessError as e:
-            print(f"Failed to install {module_name}. Error: {e}")
-            print("Possible fixes:")
-            print("- Use a virtual environment: python -m venv venv; source venv/bin/activate")
-            print("- Ensure internet connection.")
-            print("- Check permissions or use --user: pip install --user {module_name}")
+            logger.error(f"Failed to install {module_name}. Error: {e}")
+            logger.error("Try: python -m venv venv; source venv/bin/activate; python app.py")
             sys.exit(1)
 
 # Install required modules
 required_modules = ["flask", "discord.py"]
-# python-dotenv is optional, only install if needed
-if not os.getenv('DISCORD_TOKEN'):
-    required_modules.append("python-dotenv")
-
 for module in required_modules:
     install_module(module)
 
@@ -43,13 +38,6 @@ for module in required_modules:
 from flask import Flask
 import discord
 from discord.ext import commands
-
-# Load .env if python-dotenv is available
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    print("No python-dotenv, relying on environment variable DISCORD_TOKEN.")
 
 # Set up Flask app
 app = Flask(__name__)
@@ -62,7 +50,7 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'Bot logged in as {bot.user}')
+    logger.info(f'Bot logged in as {bot.user}')
 
 @bot.command()
 async def ping(ctx):
@@ -71,12 +59,12 @@ async def ping(ctx):
 def run_bot():
     token = os.getenv('DISCORD_TOKEN')
     if not token:
-        print("Error: DISCORD_TOKEN not set. Set it as an environment variable or in .env for local use.")
+        logger.error("DISCORD_TOKEN not set. Add it to environment variables.")
         return
     try:
         bot.run(token)
     except Exception as e:
-        print(f"Failed to start bot: {e}")
+        logger.error(f"Failed to start bot: {e}")
 
 # Flask routes
 @app.route('/')
@@ -134,7 +122,7 @@ def run_bot_endpoint():
 
 if __name__ == '__main__':
     try:
-        app.run(debug=True)
+        app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)), debug=True)
     except Exception as e:
-        print(f"Failed to start Flask server: {e}")
-        print("Ensure port 5000 is not in use.")
+        logger.error(f"Failed to start Flask server: {e}")
+        logger.error("Ensure port is not in use.")
